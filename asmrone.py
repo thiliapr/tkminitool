@@ -63,7 +63,7 @@ def ask_which_remove(files: list) -> None:
 def main():
     parser = argparse.ArgumentParser(
         prog="asmrone",
-        description="Download AMSR From amsr.one",
+        description="Download AMSR From asmr.one",
         epilog="License: MIT License"
     )
     parser.add_argument("-r", "--rj_number", type=str, help="Format: RJXXXXX", dest="rj")
