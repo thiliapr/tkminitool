@@ -1,4 +1,3 @@
-import requests
 import json
 import os
 import argparse
@@ -6,6 +5,12 @@ import platform
 import shutil
 import subprocess
 
+import requests
+
+"""
+Requirements:
+requests
+"""
 
 def read_asmrone(path: dict, cur_path: str, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str]]:
     if files is None:
