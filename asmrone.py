@@ -1,16 +1,12 @@
+import requests
 import json
 import os
 import argparse
 import platform
 import shutil
 import subprocess
+import sys
 
-import requests
-
-"""
-Requirements:
-requests
-"""
 
 def read_asmrone(path: dict, cur_path: str, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str]]:
     if files is None:
@@ -43,10 +39,12 @@ def ask_which_remove(files: list) -> None:
             print(f"{i})", files[i][0], files[i][1])
 
         # Get which remove
-        answer = input("Which would you remove (e.g `0, 1-2`, q to quit): ")
+        answer = input("Which would you remove (e.g `0, 1-2`, enter to download, q to quit): ")
 
         # If quit
-        if answer == "q" or answer == "":
+        if answer == "q":
+            sys.exit()
+        elif answer == "":
             break
 
         # Get remove_start_at, number_to_remove
@@ -68,10 +66,11 @@ def ask_which_remove(files: list) -> None:
 def main():
     parser = argparse.ArgumentParser(
         prog="asmrone",
-        description="Download AMSR From asmr.one",
+        description="Download AMSR From amsr.one",
         epilog="License: MIT License"
     )
-    parser.add_argument("-r", "--rj_number", type=str, help="Format: RJXXXXX", dest="rj")
+    parser.add_argument("-r", "--rj-number", type=str, help="Format: RJXXXXX", dest="rj")
+    parser.add_argument("-m", "--mirror", type=str, help="Download Mirror", default="asmr.one", required=False, dest="host")
     args = parser.parse_args()
 
     # No RJ number in Arguments
@@ -83,7 +82,7 @@ def main():
     rj = int(rj[rj.startswith("RJ") * 2:])
 
     # Request directory from amsr.one
-    directory_content = json.loads(requests.get(f"https://api.asmr-200.com/api/tracks/{rj}").content)
+    directory_content = json.loads(requests.get(f"https://api.{args.host}/api/tracks/{rj}").content)
     directory = {"type": "folder", "title": f"RJ{rj}", "children": directory_content}
 
     # Read directory
@@ -106,7 +105,7 @@ def main():
             os.system(f'mkdir "{path}"')
 
         print(f"Donwload {filepath}")
-        curl_process = subprocess.Popen((curl, url, "-o", filepath))
+        curl_process = subprocess.Popen((curl, url, "-C", "-", "-o", filepath))
         curl_process.wait()
 
 
