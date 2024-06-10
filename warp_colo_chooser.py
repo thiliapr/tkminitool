@@ -10,6 +10,7 @@ Requirements:
 requests
 """
 
+
 def get_program_output(args):
     try:
         output = subprocess.check_output(args, universal_newlines=True)
@@ -29,12 +30,19 @@ def warp_reconnect(warp_cli_path):
 
 
 def get_colo():
-    r = requests.get("https://one.one.one.one/cdn-cgi/trace")
+    try:
+        r = requests.get("https://one.one.one.one/cdn-cgi/trace", timeout=5)
+    except ConnectionError as e:
+        return e
 
     colo_loc = r.text.find("colo=")
     colo = r.text[colo_loc + 5:colo_loc + 8]
 
     return colo
+
+
+def time_strf():
+    return datetime.datetime.now().strftime("[%Y-%m-%d] [%H:%M:%S]")
 
 
 def main():
@@ -48,15 +56,23 @@ def main():
     args = parser.parse_args()
 
     while True:
-        print(datetime.datetime.now().strftime("[%Y-%m-%d] [%H:%M:%S]"), "Try to reconect..."
+        print(time_strf(), "Try to reconnect...")
         warp_reconnect(args.warp_cli_path)
+        print(time_strf(), "Reconnected.")
 
         cur_colo = get_colo()
-        print("{} Switched colo to {}.".format(datetime.datetime.now().strftime("[%Y-%m-%d] [%H:%M:%S]"), cur_colo), flush=True)
+
+        if isinstance(cur_colo, Exception):
+            print("Conncetion Error:", cur_colo.strerror)
+            break
+
+        print(time_strf(), "Switched colo to", cur_colo)
 
         if cur_colo == args.colo:
             print("Congratulations! You have successfully switched colo to {}.".format(args.colo), flush=True)
-            return
+            break
+
+    input("Enter to exit: ")
 
 
 if __name__ == "__main__":
