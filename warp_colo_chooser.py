@@ -48,6 +48,7 @@ def main():
     args = parser.parse_args()
 
     while True:
+        print(datetime.datetime.now().strftime("[%Y-%m-%d] [%H:%M:%S]"), "Try to reconect..."
         warp_reconnect(args.warp_cli_path)
 
         cur_colo = get_colo()
