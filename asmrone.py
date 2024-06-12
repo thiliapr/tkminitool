@@ -6,9 +6,15 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
+
+"""
+requirements:
+requests
+"""
 
 
-def read_asmrone(path: dict, cur_path: str, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str]]:
+def read_asmrone(path: dict, cur_path: str, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str, str]]:
     if files is None:
         files = []
 
@@ -98,15 +104,38 @@ def main():
     for file in files:
         path, filename, url = file
         filepath = os.path.join(path, filename)
+        file_size = int(requests.head(url).headers["Content-Length"])
 
         if os.path.isfile(path):
             os.remove(path)
         if not os.path.exists(path):
             os.system(f'mkdir "{path}"')
 
-        print(f"Donwload {filepath}")
-        curl_process = subprocess.Popen((curl, url, "-C", "-", "-o", filepath))
-        curl_process.wait()
+        print(filepath)
+
+        just_now_file_size = 0
+        while (cur_file_size := os.path.getsize(filepath)) < file_size:
+            more = cur_file_size - just_now_file_size
+            print("\r+%.2fMiB; +%.3f%%; %.2f MiB/%.2f MiB -> %.3f%% %20s" % (
+                more / 1048576,
+                more * 100 / file_size,
+                cur_file_size / 1048576,
+                file_size / 1048576,
+                cur_file_size * 100 / file_size,
+                "*"
+            ))
+
+            # Download
+            time.sleep(4)
+            curl_process = subprocess.Popen((curl, url, "-#", "-C", "-", "-o", filepath))
+
+            stopwatch_at = time.time()
+            while time.time() - stopwatch_at < 8:
+                time.sleep(0.5)
+            curl_process.kill()
+            curl_process.wait()
+
+            just_now_file_size = cur_file_size
 
 
 if __name__ == '__main__':
