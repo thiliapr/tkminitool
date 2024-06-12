@@ -42,7 +42,7 @@ def ask_which_remove(files: list) -> None:
 
         # Show files
         for i in range(len(files)):
-            print(f"{i})", files[i][0], files[i][1])
+            print(f"{i})", os.path.join(files[i][0], files[i][1]))
 
         # Get which remove
         answer = input("Which would you remove (e.g `0, 1-2`, enter to download, q to quit): ")
@@ -110,6 +110,9 @@ def main():
             os.remove(path)
         if not os.path.exists(path):
             os.system(f'mkdir "{path}"')
+        if not os.path.exists(filepath):
+            with open(filepath, mode="wb") as f:
+                f.write(b"")
 
         print(filepath)
 
@@ -126,7 +129,7 @@ def main():
             ))
 
             # Download
-            time.sleep(4)
+            time.sleep(1)
             curl_process = subprocess.Popen((curl, url, "-#", "-C", "-", "-o", filepath))
 
             stopwatch_at = time.time()
