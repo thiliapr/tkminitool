@@ -2,6 +2,7 @@ import argparse
 import datetime
 import subprocess
 import time
+from typing import Any
 
 import requests
 
@@ -29,16 +30,14 @@ def warp_reconnect(warp_cli_path):
         time.sleep(1)
 
 
-def get_colo():
+def get_trace_info() -> dict[str, Any] | Exception:
     try:
         r = requests.get("https://one.one.one.one/cdn-cgi/trace", timeout=5)
     except ConnectionError as e:
         return e
 
-    colo_loc = r.text.find("colo=")
-    colo = r.text[colo_loc + 5:colo_loc + 8]
-
-    return colo
+    info = dict([kv.split("=", 2) for kv in r.text.splitlines()])
+    return info
 
 
 def time_strf():
@@ -50,6 +49,9 @@ def main():
         prog='warp-colo-chooser',
         description='Choose the colo of warp to target',
         epilog='Copyright By thiliapr, License by GPLv3.')
+    parser.add_argument("--pause", action="store_true", help="The program will pause before exit.")
+    parser.add_argument("--only-ipv4", action="store_true", default=True, help="The program will stop when IP is IPv4.")
+    parser.add_argument("--only-ipv6", action="store_true", help="The program will stop when IP is IPv6.")
     parser.add_argument("-c", "--colo", type=str, default="HKG", help="The program will setting colo to this.")
     parser.add_argument("-p", "--warp-cli-path", type=str, default="C:\\Program Files\\Cloudflare\\Cloudflare WARP",
                         help="Path of CLI of Cloudflare")
@@ -60,19 +62,27 @@ def main():
         warp_reconnect(args.warp_cli_path)
         print(time_strf(), "Reconnected.")
 
-        cur_colo = get_colo()
+        trace_info = get_trace_info()
 
-        if isinstance(cur_colo, Exception):
-            print("Conncetion Error:", cur_colo.strerror)
+        if isinstance(trace_info, Exception):
+            print("Conncetion Error:", trace_info.strerror)
             break
 
-        print(time_strf(), "Switched colo to", cur_colo)
+        print(time_strf(), "Info:", "IP=" + trace_info["ip"], "colo=" + trace_info["colo"])
 
-        if cur_colo == args.colo:
+        if args.only_ipv4:
+            if "." not in trace_info["ip"]:
+                break
+        elif args.only_ipv6:
+            if "[" not in trace_info["ip"]:
+                break
+
+        if trace_info["colo"] == args.colo:
             print("Congratulations! You have successfully switched colo to {}.".format(args.colo), flush=True)
             break
 
-    input("Enter to exit: ")
+    if args.pause:
+        input("Enter to exit: ")
 
 
 if __name__ == "__main__":
