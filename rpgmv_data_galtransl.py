@@ -15,20 +15,59 @@ __version__ = "1.0"
 
 class RPGMakerMVData:
 	@staticmethod
-	def event(event: jsonpath.JSONObject, parent_path: str) -> list[str] | None:
-		try:
-			if event["code"] == 102:
-				return [jsonpath.concat_path(parent_path, f"$.parameters[0][{i}]") for i in range(len(event["parameters"][0])) if event["parameters"][0][i]]
-			elif event["code"] == 401:
-				return [jsonpath.concat_path(parent_path, "$.parameters[0]")] if event["parameters"][0] else []
-			else:
-				return
-		except KeyError as e:
-			e.add_note(f"Event; path={parent_path}:\n" + json.dumps(event) + "\n" + "-" * 16)
-			raise e
+	def event(event: jsonpath.JSONObject, parent_path: str, events_code: list[int]) -> list[str] | None:
+		if event["code"] not in events_code:
+			return
+		elif event["code"] == 102:
+			return [jsonpath.concat_path(parent_path, f"$.parameters[0][{i}]") for i in range(len(event["parameters"][0])) if event["parameters"][0][i]]
+		elif event["code"] == 108:
+			return [jsonpath.concat_path(parent_path, "$.parameters[0]")] if event["parameters"][0] else []
+		elif event["code"] == 401:
+			return [jsonpath.concat_path(parent_path, "$.parameters[0]")] if event["parameters"][0] else []
+		else:
+			log("RPGMakerMVData-EventParser", f"Unknown Event Code: {event['code']}.")
+			return
 
 	@staticmethod
-	def common_events(events: list) -> list[str]:
+	def items(items: list, without_name: bool = True) -> list[str]:
+		messages: list[str] = []
+		for item_index in range(len(items)):
+			item = items[item_index]
+			if item is None:
+				continue
+
+			for key in ("description", "message1", "message2", "message3", "message4"):
+				if item.get(key):
+					messages.append(f"$[{item_index}].{key}")
+
+			if not without_name and item.get("name"):
+				messages.append(f"$[{item_index}].name")
+
+		return messages
+
+	@staticmethod
+	def map_events(map_events: dict, events_code: list[int]) -> list[str]:
+		messages: list[str] = []
+
+		for map_event_index in range(len(map_events["events"])):
+			map_event = map_events["events"][map_event_index]
+			if map_event is None:
+				continue
+
+			for page_index in range(len(map_event["pages"])):
+				page = map_event["pages"][page_index]
+
+				for event_index in range(len(page["list"])):
+					event = page["list"][event_index]
+
+					event_messages = RPGMakerMVData.event(event, f"$.events[{map_event_index}].pages[{page_index}].list[{event_index}]", events_code)
+					if event_messages:
+						messages += event_messages
+
+		return messages
+
+	@staticmethod
+	def common_events(events: list, events_code: list[int]) -> list[str]:
 		messages: list[str] = []
 		for common_event_index in range(len(events)):
 			common_event = events[common_event_index]
@@ -38,52 +77,9 @@ class RPGMakerMVData:
 			for event_index in range(len(common_event["list"])):
 				event = common_event["list"][event_index]
 
-				message = RPGMakerMVData.event(event, f"$[{common_event_index}].list[{event_index}]")
+				message = RPGMakerMVData.event(event, f"$[{common_event_index}].list[{event_index}]", events_code)
 				if message:
 					messages += message
-
-		return messages
-
-	@staticmethod
-	def items(items: list) -> list[str]:
-		messages: list[str] = []
-		for item_index in range(len(items)):
-			item = items[item_index]
-			if item is None:
-				continue
-			if not item.get("description"):
-				continue
-
-			messages.append(f"$[{item_index}].description")
-
-		return messages
-
-	@staticmethod
-	def map_events(map_events: dict) -> list[str]:
-		messages: list[str] = []
-
-		try:
-			for map_event_index in range(len(map_events["events"])):
-				map_event = map_events["events"][map_event_index]
-				if map_event is None:
-					continue
-
-				try:
-					for page_index in range(len(map_event["pages"])):
-						page = map_event["pages"][page_index]
-
-						for event_index in range(len(page["list"])):
-							event = page["list"][event_index]
-
-							event_messages = RPGMakerMVData.event(event, f"$.events[{map_event_index}].pages[{page_index}].list[{event_index}]")
-							if event_messages:
-								messages += event_messages
-				except KeyError as e:
-					e.add_note(f"Map Event; path={f'$.events[{event_index}]'}:\n{json.dumps(event)}\n" + "-" * 16)
-					raise e
-		except KeyError as e:
-			e.add_note(f"Map:\n{json.dumps(map_events)}\n" + "-" * 16)
-			raise e
 
 		return messages
 
@@ -97,7 +93,16 @@ def log(at: str, message: str, verbose: bool = False) -> None:
 		print(time.strftime("[%Y-%m-%d] [%H:%M:%S]"), f"[{at}]", message)
 
 
-def extract_script(data_path: str, output_path: str, verbose: bool = False):
+def create_dir(at: str):
+	if os.path.exists(at):
+		if os.path.isfile(at):
+			os.remove(at)
+		else:
+			return
+	os.mkdir(at)
+
+
+def extract_script(data_path: str, output_path: str, events_code: list[int], without_name: bool, verbose: bool = False):
 	# Read data files from data path
 	log("ScriptExtractor", f"Loading Data...")
 
@@ -125,11 +130,11 @@ def extract_script(data_path: str, output_path: str, verbose: bool = False):
 			log("ScriptExtractor", f"Extracting {filename}", verbose=True)
 
 		if filename == "CommonEvents.json":
-			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.common_events(data)]
+			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.common_events(data, events_code)]
 		elif isinstance(data, list):
-			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.items(data)]
+			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.items(data, without_name)]
 		elif isinstance(data, dict):
-			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.map_events(data)]
+			messages[filename] = [{"path": message_path, "message": jsonpath.get(data, message_path)} for message_path in RPGMakerMVData.map_events(data, events_code)]
 
 	log("ScriptExtractor", f"Extracted data.")
 
@@ -231,18 +236,23 @@ def apply_script(data_path: str, rpgmaker_script_path: str, galtransl_script_pat
 
 
 def main():
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser(description="RPGMaker MV/MZ Script Extractor")
 	parser.add_argument("action", choices=["extract_script", "generate_galtransl_script", "apply_script"], help="Action")
 	parser.add_argument("-d", "--data", help="Game Data Path (extract_script, apply_script)")
 	parser.add_argument("-s", "--rpgmaker-script", help="RPGMaker Script Path (generate_galtransl_script, apply_script)")
 	parser.add_argument("-g", "--galtransl-script", help="GalTransl Script Path (apply_script)")
 	parser.add_argument("-o", "--output", default="output/", help="Output Path (ALL)")
+	parser.add_argument("-e", "--only-needed-events", action="store_true", help="Translate only displayable events.")
+	parser.add_argument("-n", "--without-name", action="store_true", help="Do not translate names.")
 	parser.add_argument("-v", "--verbose", action="store_true", default=False)
 	parser.add_argument("-V", "--version", action="version", version=__version__, help="Show version")
 	args = parser.parse_args()
 
+	events_code: list[int] = [102, 401] if args.only_needed_events else [102, 108, 401]
+	create_dir(args.output)
+
 	if args.action == "extract_script":
-		extract_script(args.data, args.output, args.verbose)
+		extract_script(args.data, args.output, events_code, args.without_name, args.verbose)
 	elif args.action == "generate_galtransl_script":
 		generate_galtransl_script(args.rpgmaker_script, args.output, args.verbose)
 	elif args.action == "apply_script":
