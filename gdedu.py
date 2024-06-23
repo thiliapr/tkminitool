@@ -63,7 +63,7 @@ def main():
 	参数解析器.add_argument("-i", "--jsession-id", required=True, help="来源于cookie。", dest="jsessionid")
 	参数解析器.add_argument("-t", "--hhcsrf-token", required=True, help="来源于HTTP请求头。", dest="HHCSRFToken")
 	参数解析器.add_argument("-c", "--certifier", required=True, help="证明人", dest="证明人")
-	参数解析器.add_argument("-t", "--context", default="空缺", help="表示空缺的字词。", dest="空缺")
+	参数解析器.add_argument("-n", "--context", default="空缺", help="表示空缺的字词。", dest="空缺")
 	参数 = 参数解析器.parse_args()
 
 	# 配置
