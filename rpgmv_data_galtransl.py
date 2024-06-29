@@ -10,7 +10,7 @@ requirements:
 thiliapr-tools
 """
 
-__version__ = "1.0"
+__version__ = "1.0.1"
 
 
 class RPGMakerMVData:
@@ -237,11 +237,11 @@ def apply_script(data_path: str, rpgmaker_script_path: str, galtransl_script_pat
 
 def main():
 	parser = argparse.ArgumentParser(description="RPGMaker MV/MZ Script Extractor")
-	parser.add_argument("action", choices=["extract_script", "generate_galtransl_script", "apply_script"], help="Action")
-	parser.add_argument("-d", "--data", help="Game Data Path (extract_script, apply_script)")
-	parser.add_argument("-s", "--rpgmaker-script", help="RPGMaker Script Path (generate_galtransl_script, apply_script)")
-	parser.add_argument("-g", "--galtransl-script", help="GalTransl Script Path (apply_script)")
-	parser.add_argument("-o", "--output", default="output/", help="Output Path (ALL)")
+	parser.add_argument("action", choices=["extract", "galtransl", "apply"], help="Action")
+	parser.add_argument("-d", "--data", help="Game Data Path (extract, apply)")
+	parser.add_argument("-s", "--rpgmaker-script", help="RPGMaker Script Path (extract, galtransl, apply)")
+	parser.add_argument("-g", "--galtransl-script", help="GalTransl Script Path (galtransl, apply)")
+	parser.add_argument("-t", "--translated-data", help="Translated Data Path (apply)")
 	parser.add_argument("-e", "--only-needed-events", action="store_true", help="Translate only displayable events.")
 	parser.add_argument("-n", "--without-name", action="store_true", help="Do not translate names.")
 	parser.add_argument("-v", "--verbose", action="store_true", default=False)
@@ -249,14 +249,16 @@ def main():
 	args = parser.parse_args()
 
 	events_code: list[int] = [102, 401] if args.only_needed_events else [102, 108, 401]
-	create_dir(args.output)
+	create_dir(args.rpgmaker_script)
+	create_dir(args.galtransl_script)
+	create_dir(args.translated_data)
 
-	if args.action == "extract_script":
-		extract_script(args.data, args.output, events_code, args.without_name, args.verbose)
-	elif args.action == "generate_galtransl_script":
-		generate_galtransl_script(args.rpgmaker_script, args.output, args.verbose)
-	elif args.action == "apply_script":
-		apply_script(args.data, args.rpgmaker_script, args.galtransl_script, args.output, args.verbose)
+	if args.action == "extract":
+		extract_script(args.data, args.rpgmaker_script, events_code, args.without_name, args.verbose)
+	elif args.action == "galtransl":
+		generate_galtransl_script(args.rpgmaker_script, args.galtransl_script, args.verbose)
+	elif args.action == "apply":
+		apply_script(args.data, args.rpgmaker_script, args.galtransl_script, args.translated_data, args.verbose)
 
 
 if __name__ == '__main__':
