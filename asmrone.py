@@ -1,12 +1,11 @@
 import requests
-import json
-import os
 import argparse
 import platform
-import shutil
-import subprocess
-import sys
-import time
+from os import makedirs
+from subprocess import Popen, run
+from sys import exit
+from shutil import which
+from pathlib import Path
 
 """
 requirements:
@@ -14,24 +13,24 @@ requests
 """
 
 
-def read_asmrone(path: dict, cur_path: str, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str, str]]:
+def read_asmrone(file: dict, cur_path: Path, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str, str]]:
     if files is None:
         files = []
 
-    if path["type"] == "folder":
-        for file in path["children"]:
-            read_asmrone(file, os.path.join(cur_path, path["title"]), files)
+    if file["type"] == "folder":
+        for child in file["children"]:
+            read_asmrone(child, cur_path / child["title"], files)
     else:
-        files.append((cur_path, path["title"], path["mediaDownloadUrl"]))
+        files.append((cur_path, file["mediaDownloadUrl"]))
 
     return files
 
 
 def clear() -> None:
     if platform.system() == "Linux":
-        os.system("clear")
+        run("clear", shell=True)
     elif platform.system() == "Windows":
-        os.system("cls")
+        run("cls", shell=True)
     else:
         print("\n" * 20)
 
@@ -42,14 +41,14 @@ def ask_which_remove(files: list) -> None:
 
         # Show files
         for i in range(len(files)):
-            print(f"{i})", os.path.join(files[i][0], files[i][1]))
+            print(f"{i})", files[i][0])
 
         # Get which remove
         answer = input("Which would you remove (e.g `0, 1-2`, enter to download, q to quit): ")
 
         # If quit
         if answer == "q":
-            sys.exit()
+            exit()
         elif answer == "":
             break
 
@@ -87,58 +86,32 @@ def main():
     # Delete "RJ" in string
     rj = int(rj[rj.startswith("RJ") * 2:])
 
+    # Get Info
+    info = requests.get(f"https://api.{args.host}/api/workInfo/{rj}").json()
+
     # Request directory from amsr.one
-    directory_content = json.loads(requests.get(f"https://api.{args.host}/api/tracks/{rj}").content)
+    directory_content = requests.get(f"https://api.{args.host}/api/tracks/{rj}").json()
     directory = {"type": "folder", "title": f"RJ{rj}", "children": directory_content}
 
     # Read directory
-    files = read_asmrone(directory, "")
+    files = read_asmrone(directory, Path(""))
 
     # Which don't like
     ask_which_remove(files)
 
     # Download
-    curl = shutil.which("curl")
+    curl = which("curl")
     assert curl, "curl not found."
 
     for file in files:
-        path, filename, url = file
-        filepath = os.path.join(path, filename)
-        file_size = int(requests.head(url).headers["Content-Length"])
-
-        if os.path.isfile(path):
-            os.remove(path)
-        if not os.path.exists(path):
-            os.system(f'mkdir "{path}"')
-        if not os.path.exists(filepath):
-            with open(filepath, mode="wb") as f:
-                f.write(b"")
+        filepath, url = file
+        filepath: Path = f"{info['title']} [RJ{rj}]" / filepath
 
         print(filepath)
+        makedirs(filepath.parent, exist_ok=True)
 
-        just_now_file_size = 0
-        while (cur_file_size := os.path.getsize(filepath)) < file_size:
-            more = cur_file_size - just_now_file_size
-            print("\r+%.2fMiB; +%.3f%%; %.2f MiB/%.2f MiB -> %.3f%% %20s" % (
-                more / 1048576,
-                more * 100 / file_size,
-                cur_file_size / 1048576,
-                file_size / 1048576,
-                cur_file_size * 100 / file_size,
-                "*"
-            ))
-
-            # Download
-            time.sleep(1)
-            curl_process = subprocess.Popen((curl, url, "-#", "-C", "-", "-o", filepath))
-
-            stopwatch_at = time.time()
-            while time.time() - stopwatch_at < 8:
-                time.sleep(0.5)
-            curl_process.kill()
-            curl_process.wait()
-
-            just_now_file_size = cur_file_size
+        curl_process = Popen((curl, url, "--progress-bar", "--continue-at", "-", "-o", filepath))
+        curl_process.wait()
 
 
 if __name__ == '__main__':
