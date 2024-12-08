@@ -1,6 +1,7 @@
 import requests
 import argparse
 import platform
+import re
 from os import makedirs
 from subprocess import Popen, run
 from sys import exit
@@ -13,9 +14,12 @@ requests
 """
 
 
-def read_asmrone(file: dict, cur_path: Path, files: list[tuple[str, str]] | None = None) -> list[tuple[str, str, str]]:
+def read_asmrone(file: dict, cur_path: Path, files: list[tuple[str, str]] | None = None) -> list[tuple[Path, str]]:
     if files is None:
         files = []
+
+    cur_path = cur_path.parent / re.sub(r'[<>:"/\\|?*]', '_', cur_path.name).replace("\n", "")
+    print(cur_path)
 
     if file["type"] == "folder":
         for child in file["children"]:
@@ -90,11 +94,12 @@ def main():
     info = requests.get(f"https://api.{args.host}/api/workInfo/{rj}").json()
 
     # Request directory from amsr.one
-    directory_content = requests.get(f"https://api.{args.host}/api/tracks/{rj}").json()
+    directory_content = requests.get(f"https://api.{args.host}/api/tracks/{info['id']}?v=1").json()
     directory = {"type": "folder", "title": f"RJ{rj}", "children": directory_content}
 
     # Read directory
     files = read_asmrone(directory, Path(""))
+    files = [f for f in files if "右側" not in f[0].name and "左側" not in f[0].name]
 
     # Which don't like
     ask_which_remove(files)
@@ -105,12 +110,14 @@ def main():
 
     for file in files:
         filepath, url = file
-        filepath: Path = f"{info['title']} [RJ{rj}]" / filepath
+        filepath = f"[RJ{rj}]" / filepath
+        print(f"url: {url}")
+        print(f"path: {filepath}")
 
         print(filepath)
         makedirs(filepath.parent, exist_ok=True)
 
-        curl_process = Popen((curl, url, "--progress-bar", "--continue-at", "-", "-o", filepath))
+        curl_process = Popen((curl, f'{url}', "--progress-bar", "--continue-at", "-", "-o", f'{filepath}'))
         curl_process.wait()
 
 
