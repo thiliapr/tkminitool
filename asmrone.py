@@ -79,7 +79,8 @@ def main():
         epilog="License: MIT License"
     )
     parser.add_argument("-r", "--rj-number", type=str, help="Format: RJXXXXX", dest="rj")
-    parser.add_argument("-m", "--mirror", type=str, help="Download Mirror", default="asmr.one", required=False, dest="host")
+    parser.add_argument("-m", "--mirror", type=str, help="Download Mirror", default="asmr-200.com", required=False, dest="host")
+    parser.add_argument("-p", "--proxy", type=str, help="Proxy", required=False, dest="proxy")
     args = parser.parse_args()
 
     # No RJ number in Arguments
@@ -91,15 +92,14 @@ def main():
     rj = int(rj[rj.startswith("RJ") * 2:])
 
     # Get Info
-    info = requests.get(f"https://api.{args.host}/api/workInfo/{rj}").json()
+    info = requests.get(f"https://api.{args.host}/api/workInfo/{rj}", proxies={"https": args.proxy} if args.proxy else {}).json()
 
     # Request directory from amsr.one
-    directory_content = requests.get(f"https://api.{args.host}/api/tracks/{info['id']}?v=1").json()
+    directory_content = requests.get(f"https://api.{args.host}/api/tracks/{info['id']}?v=1", proxies={"https": args.proxy} if args.proxy else {}).json()
     directory = {"type": "folder", "title": f"RJ{rj}", "children": directory_content}
 
     # Read directory
     files = read_asmrone(directory, Path(""))
-    files = [f for f in files if "右側" not in f[0].name and "左側" not in f[0].name]
 
     # Which don't like
     ask_which_remove(files)
@@ -110,14 +110,11 @@ def main():
 
     for file in files:
         filepath, url = file
-        filepath = f"[RJ{rj}]" / filepath
+        filepath = f"RJ{rj}" / filepath
         print(f"url: {url}")
         print(f"path: {filepath}")
-
-        print(filepath)
         makedirs(filepath.parent, exist_ok=True)
-
-        curl_process = Popen((curl, f'{url}', "--progress-bar", "--continue-at", "-", "-o", f'{filepath}'))
+        curl_process = Popen((curl, f'{url}', "--progress-bar", "--continue-at", "-", "-o", f'{filepath}') + (("-x", args.proxy) if args.proxy else ()))
         curl_process.wait()
 
 
